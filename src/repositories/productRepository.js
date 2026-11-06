@@ -1,6 +1,9 @@
 const db = require('../config/database');
 const { normalizeCategory } = require('../utils/cacheKeys');
 
+// Limite máximo de produtos retornados em listagens.
+const MAX_LIST_LIMIT = 10;
+
 async function findById(id) {
   // Entrada validada antes de chegar ao repository; SQL parametrizado.
   const result = await db.query(
@@ -10,18 +13,20 @@ async function findById(id) {
   return result.rows[0] || null;
 }
 
-async function findAll({ categoria }) {
+async function findAll({ categoria } = {}) {
   if (categoria) {
     const result = await db.query(
       `SELECT id, nome, categoria, preco, created_at, updated_at
-       FROM produtos WHERE LOWER(categoria) = $1 ORDER BY id`,
-      [normalizeCategory(categoria)]
+       FROM produtos WHERE LOWER(categoria) = $1 ORDER BY id LIMIT $2`,
+      [normalizeCategory(categoria), MAX_LIST_LIMIT]
     );
     return result.rows;
   }
 
   const result = await db.query(
-    'SELECT id, nome, categoria, preco, created_at, updated_at FROM produtos ORDER BY id'
+    `SELECT id, nome, categoria, preco, created_at, updated_at
+     FROM produtos ORDER BY id LIMIT $1`,
+    [MAX_LIST_LIMIT]
   );
   return result.rows;
 }

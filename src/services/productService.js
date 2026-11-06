@@ -5,29 +5,50 @@ const { productKey, productsListKey } = require('../utils/cacheKeys');
 
 async function getById(id) {
   const key = productKey(id);
-  const cached = await redis.get(key);
 
-  if (cached !== null) {
-    return { data: JSON.parse(cached), cache: 'HIT' };
+  // Tenta ler do cache; se o Redis falhar, segue sem cache
+  try {
+    const cached = await redis.get(key);
+    if (cached !== null) {
+      return { data: JSON.parse(cached), cache: 'HIT' };
+    }
+  } catch (err) {
+    console.error('[cache] Erro ao ler do Redis em getById:', err.message);
   }
 
   const product = await repository.findById(id);
   if (!product) return { data: null, cache: 'MISS' };
 
-  await redis.set(key, JSON.stringify(product), { EX: cacheTtlSeconds });
+  // Tenta gravar no cache; falha não impede o retorno
+  try {
+    await redis.set(key, JSON.stringify(product), { EX: cacheTtlSeconds });
+  } catch (err) {
+    console.error('[cache] Erro ao gravar no Redis em getById:', err.message);
+  }
+
   return { data: product, cache: 'MISS' };
 }
 
 async function getAll(filters) {
   const key = productsListKey(filters);
-  const cached = await redis.get(key);
 
-  if (cached !== null) {
-    return { data: JSON.parse(cached), cache: 'HIT' };
+  try {
+    const cached = await redis.get(key);
+    if (cached !== null) {
+      return { data: JSON.parse(cached), cache: 'HIT' };
+    }
+  } catch (err) {
+    console.error('[cache] Erro ao ler do Redis em getAll:', err.message);
   }
 
   const products = await repository.findAll(filters);
-  await redis.set(key, JSON.stringify(products), { EX: cacheTtlSeconds });
+
+  try {
+    await redis.set(key, JSON.stringify(products), { EX: cacheTtlSeconds });
+  } catch (err) {
+    console.error('[cache] Erro ao gravar no Redis em getAll:', err.message);
+  }
+
   return { data: products, cache: 'MISS' };
 }
 
@@ -36,8 +57,13 @@ async function update(id, data) {
   if (!updated) return null;
 
   // Invalida o cache do produto e todas as listas de produtos.
-  const keys = await redis.keys('produtos:list:*');
-  await redis.del([productKey(id), ...keys]);
+  try {
+    const keys = await redis.keys('produtos:list:*');
+    await redis.del([productKey(id), ...keys]);
+  } catch (err) {
+    console.error('[cache] Erro ao invalidar cache no Redis em update:', err.message);
+  }
+
   return updated;
 }
 
